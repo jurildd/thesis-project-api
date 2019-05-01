@@ -3,6 +3,13 @@ const bodyParser = require('body-parser');
 const bcrypt = require('bcrypt-nodejs');
 const cors = require('cors');
 const knex = require('knex');
+const ContentBasedRecommender = require('content-based-recommender')
+
+const recommender = new ContentBasedRecommender({
+  minScore: 0.0,
+  maxSimilarDocuments: 152,
+  debug: true
+});
 
 const db = knex({
     client: 'pg',
@@ -13,6 +20,15 @@ const db = knex({
         database: 'thesis-project'
     }
 });
+
+const trainRecommender = () => {
+    db.select('id','title as content').from('files2').then(data => {
+        // console.log(data);
+        recommender.train(data)
+        const temp = recommender.getSimilarDocuments("49",0,5);    
+        console.log(temp)
+    })
+}
 
 db.select('*').from('users').then(data => {
     // console.log(data);
@@ -92,10 +108,33 @@ app.get('/profile/:id', (req, res) => {
 })
 
 app.get('/repository', (req, res) => {
-    db.select('*').from('files').then(data => {
+    db.select('*').from('files2').then(data => {
         res.json(data)
+        console.log(data)
     })    
 })
+
+app.get('/repository/:id', (req, res) => {
+    const {id} = req.params;
+    db.select('*').from('files2').where({
+        id: id
+    }).then(thesis => {
+        if(thesis.length) {
+            res.json(thesis[0])
+        }
+        else {
+            res.status(400).json('Thesis not found')
+        }
+    }).catch(err => res.status(400).json('Error getting thesis'))
+})
+
+// app.get('/repository/:id', (req,res) => {
+//     const id = req.params.id;
+//     const similarDocuments = recommender.getSimilarDocuments(id, 0, 5);
+//     res.json(similarDocuments);
+// })
+
+trainRecommender();
 
 app.listen(3001,() => {
     console.log('app is running on port 3001');
